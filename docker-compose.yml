@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # 1. Database
+  db:
+    image: postgres:15-alpine
+    container_name: portfolio_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: portfolio_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: always
+
+  # 2. Backend API
+  backend:
+    build: ./backend
+    container_name: portfolio_api
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/portfolio_db
+      PORT: 4000
+      NODE_ENV: production
+    ports:
+      - "4000:4000"
+    depends_on:
+      - db
+    networks:
+      - app-network
+    restart: on-failure
+
+  # 3. Frontend Next.js
+  frontend:
+    build: ./frontend
+    container_name: hoan_portfolio_web
+    environment:
+      NEXT_PUBLIC_API_URL: /api # Client gọi qua Nginx
+    networks:
+      - app-network
+    restart: always
+
+  # 4. Nginx Reverse Proxy
+  nginx:
+    build: ./nginx
+    container_name: hoan_portfolio_proxy
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db_data:

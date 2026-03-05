@@ -1,0 +1,62 @@
+name: Deploy Portfolio
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Login Docker Hub (Bạn cần cài secrets trên GitHub Repo)
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 2. Build & Push Backend
+      - name: Build and Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/hoan-backend:latest
+
+      # 3. Build & Push Frontend
+      - name: Build and Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/hoan-frontend:latest
+
+      # 4. Build & Push Nginx
+      - name: Build and Push Nginx
+        uses: docker/build-push-action@v5
+        with:
+          context: ./nginx
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/hoan-nginx:latest
+
+      # 5. Deploy to VPS via SSH
+      - name: SSH to VPS and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_PRIVATE_KEY }}
+          script: |
+            cd ~/portfolio
+            git pull origin main
+            # Tạo file .env nếu chưa có
+            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" > .env
+
+            # Pull image mới nhất về
+            docker-compose pull
+
+            # Khởi động lại container (chỉ update cái nào thay đổi)
+            docker-compose up -d
